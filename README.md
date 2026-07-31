@@ -2,6 +2,8 @@
 
 TimeClicker is a small Windows tray tool for saving the current time with one click.
 
+Project link: <https://github.com/stevengeyue>
+
 It keeps a compact desktop window for the current time and the last recorded time. Clicking the tray icon brings the window back if it is hidden; clicking again records the time and copies it to the clipboard.
 
 ## Features
@@ -27,6 +29,7 @@ Run `TimeClicker.exe`.
   - choose the clipboard format
   - set a custom format
   - open the log file
+  - open the GitHub link
   - toggle start with Windows
   - exit
 

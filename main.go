@@ -24,6 +24,8 @@ import (
 
 const (
 	appName       = "TimeClicker"
+	appGitHubURL  = "https://github.com/stevengeyue"
+	appCreditLine = "GitHub: https://github.com/stevengeyue"
 	settingsName  = "settings.json"
 	recordsName   = "records.ndjson"
 	mutexName      = `Local\TimeClicker.SingleInstance`
@@ -258,6 +260,12 @@ func buildTray(icon *walk.Icon) error {
 	if err = addAction(actions, "打开日志文件", openLogFile); err != nil {
 		return err
 	}
+	if err = addAction(actions, "GitHub: stevengeyue", openGitHub); err != nil {
+		return err
+	}
+	if err = addAction(actions, "关于 TimeClicker", showAbout); err != nil {
+		return err
+	}
 	if err = actions.Add(walk.NewSeparatorAction()); err != nil {
 		return err
 	}
@@ -344,6 +352,14 @@ func toggleStartup() {
 func openLogFile() {
 	ensureLogFile()
 	_ = exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", recordsPath).Start()
+}
+
+func openGitHub() {
+	_ = exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", appGitHubURL).Start()
+}
+
+func showAbout() {
+	walk.MsgBox(mw, "关于 TimeClicker", appCreditLine, walk.MsgBoxIconInformation)
 }
 
 func quitApp() {
@@ -541,7 +557,7 @@ func formatID(value string) string {
 }
 
 func trayTip() string {
-	return fmt.Sprintf("%s\n上次记录: %s\n格式: %s", appName, lastRecord, settings.CopyFormat)
+	return fmt.Sprintf("%s\n%s\n上次记录: %s\n格式: %s", appName, appCreditLine, lastRecord, settings.CopyFormat)
 }
 
 func restoreWindowPlacement() {

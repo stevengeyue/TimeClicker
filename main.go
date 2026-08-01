@@ -32,6 +32,7 @@ const (
 	windowWidth    = 300
 	windowHeight   = 168
 	startupRegPath = `Software\Microsoft\Windows\CurrentVersion\Run`
+	themeRegPath   = `Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`
 )
 
 type appSettings struct {
@@ -650,12 +651,33 @@ func currentTheme() themeOption {
 	if id == "" {
 		id = defaultSettings().AppearanceTheme
 	}
+	if id == "system" {
+		return themeByID(systemThemeID())
+	}
+	return themeByID(id)
+}
+
+func themeByID(id string) themeOption {
 	for _, opt := range themes {
 		if opt.ID == id {
 			return opt
 		}
 	}
 	return themes[0]
+}
+
+func systemThemeID() string {
+	key, err := registry.OpenKey(registry.CURRENT_USER, themeRegPath, registry.QUERY_VALUE)
+	if err != nil {
+		return "light"
+	}
+	defer key.Close()
+
+	value, _, err := key.GetIntegerValue("AppsUseLightTheme")
+	if err == nil && value == 0 {
+		return "dark"
+	}
+	return "light"
 }
 
 func initPaths() {

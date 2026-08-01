@@ -23,11 +23,11 @@ import (
 )
 
 const (
-	appName       = "TimeClicker"
-	appGitHubURL  = "https://github.com/stevengeyue"
-	appCreditLine = "GitHub: https://github.com/stevengeyue"
-	settingsName  = "settings.json"
-	recordsName   = "records.ndjson"
+	appName        = "TimeClicker"
+	appGitHubURL   = "https://github.com/stevengeyue"
+	appCreditLine  = "GitHub: https://github.com/stevengeyue"
+	settingsName   = "settings.json"
+	recordsName    = "records.ndjson"
 	mutexName      = `Local\TimeClicker.SingleInstance`
 	windowWidth    = 300
 	windowHeight   = 168
@@ -36,6 +36,7 @@ const (
 
 type appSettings struct {
 	CopyFormat       string `json:"copyFormat"`
+	AppearanceTheme  string `json:"appearanceTheme"`
 	ShowWidget       bool   `json:"showWidget"`
 	AlwaysOnTop      bool   `json:"alwaysOnTop"`
 	WidgetCorner     string `json:"widgetCorner"`
@@ -58,6 +59,16 @@ type formatOption struct {
 	ID    string
 }
 
+type themeOption struct {
+	ID     string
+	Label  string
+	Body   walk.Color
+	Title  walk.Color
+	Button walk.Color
+	Text   walk.Color
+	Muted  walk.Color
+}
+
 var formats = []formatOption{
 	{Label: "yyyy-MM-dd HH:mm:ss", Value: "yyyy-MM-dd HH:mm:ss", ID: "default_seconds"},
 	{Label: "yyyy/MM/dd HH:mm", Value: "yyyy/MM/dd HH:mm", ID: "slash_minutes"},
@@ -66,20 +77,37 @@ var formats = []formatOption{
 	{Label: "ISO 8601", Value: "ISO 8601", ID: "iso8601"},
 }
 
+var themes = []themeOption{
+	{ID: "system", Label: "跟随系统", Body: walk.RGB(245, 247, 250), Title: walk.RGB(232, 238, 246), Button: walk.RGB(255, 255, 255), Text: walk.RGB(26, 32, 44), Muted: walk.RGB(92, 106, 126)},
+	{ID: "light", Label: "浅色", Body: walk.RGB(245, 247, 250), Title: walk.RGB(232, 238, 246), Button: walk.RGB(255, 255, 255), Text: walk.RGB(26, 32, 44), Muted: walk.RGB(92, 106, 126)},
+	{ID: "dark", Label: "深色", Body: walk.RGB(34, 39, 46), Title: walk.RGB(24, 29, 36), Button: walk.RGB(48, 56, 67), Text: walk.RGB(239, 242, 246), Muted: walk.RGB(166, 176, 190)},
+	{ID: "pastelBlue", Label: "淡蓝", Body: walk.RGB(227, 253, 253), Title: walk.RGB(203, 241, 245), Button: walk.RGB(166, 227, 233), Text: walk.RGB(38, 76, 87), Muted: walk.RGB(113, 201, 206)},
+	{ID: "pastelPink", Label: "淡粉", Body: walk.RGB(246, 246, 246), Title: walk.RGB(255, 226, 226), Button: walk.RGB(255, 199, 199), Text: walk.RGB(70, 67, 89), Muted: walk.RGB(135, 133, 162)},
+}
+
 var (
-	mw           *walk.MainWindow
-	notifyIcon   *walk.NotifyIcon
-	currentLabel *walk.Label
-	lastLabel    *walk.Label
-	formatLabel  *walk.Label
-	topMostAction *walk.Action
-	startupAction *walk.Action
-	settings     appSettings
-	appDir       string
-	settingsPath string
-	recordsPath  string
-	lastRecord   = "尚未记录"
-	mutexHandle  windows.Handle
+	mw             *walk.MainWindow
+	notifyIcon     *walk.NotifyIcon
+	titleBar       *walk.Composite
+	contentPanel   *walk.Composite
+	titleLabel     *walk.Label
+	currentCaption *walk.Label
+	currentLabel   *walk.Label
+	lastCaption    *walk.Label
+	lastLabel      *walk.Label
+	formatLabel    *walk.Label
+	closeButton    *walk.PushButton
+	copyButton     *walk.PushButton
+	recordButton   *walk.PushButton
+	topMostAction  *walk.Action
+	startupAction  *walk.Action
+	themeActions   = map[string]*walk.Action{}
+	settings       appSettings
+	appDir         string
+	settingsPath   string
+	recordsPath    string
+	lastRecord     = "尚未记录"
+	mutexHandle    windows.Handle
 )
 
 func main() {
@@ -117,6 +145,7 @@ func main() {
 	defer notifyIcon.Dispose()
 
 	applyToolWindowStyle()
+	applyAppearance()
 	applyTopMost()
 	restoreWindowPlacement()
 	refreshLabels()
@@ -141,6 +170,13 @@ func main() {
 }
 
 func buildWindow(icon *walk.Icon) error {
+	dragWindow := func(x, y int, button walk.MouseButton) {
+		if button == walk.LeftButton && mw != nil {
+			win.ReleaseCapture()
+			win.SendMessage(mw.Handle(), win.WM_NCLBUTTONDOWN, win.HTCAPTION, 0)
+		}
+	}
+
 	err := MainWindow{
 		AssignTo: &mw,
 		Title:    appName,
@@ -149,42 +185,73 @@ func buildWindow(icon *walk.Icon) error {
 		MaxSize:  Size{windowWidth, windowHeight},
 		Size:     Size{windowWidth, windowHeight},
 		Layout: VBox{
-			Margins: Margins{Left: 12, Top: 10, Right: 12, Bottom: 10},
-			Spacing: 4,
+			MarginsZero: true,
+			Spacing:     0,
 		},
 		Children: []Widget{
 			Composite{
-				Layout: HBox{MarginsZero: true, Spacing: 8},
+				AssignTo:    &titleBar,
+				MinSize:     Size{windowWidth, 24},
+				MaxSize:     Size{windowWidth, 24},
+				Layout:      HBox{Margins: Margins{Left: 8, Top: 0, Right: 0, Bottom: 0}, Spacing: 0},
+				OnMouseDown: dragWindow,
+				Children: []Widget{
+					Label{
+						AssignTo:    &titleLabel,
+						Text:        appName,
+						Font:        Font{PointSize: 8, Bold: true},
+						OnMouseDown: dragWindow,
+					},
+					HSpacer{},
+					PushButton{
+						AssignTo:  &closeButton,
+						Text:      "x",
+						MinSize:   Size{24, 24},
+						MaxSize:   Size{24, 24},
+						OnClicked: hideWidget,
+					},
+				},
+			},
+			Composite{
+				AssignTo: &contentPanel,
+				Layout:   VBox{Margins: Margins{Left: 12, Top: 8, Right: 12, Bottom: 10}, Spacing: 4},
 				Children: []Widget{
 					Composite{
-						Layout: VBox{MarginsZero: true, Spacing: 2},
+						Layout: HBox{MarginsZero: true, Spacing: 8},
 						Children: []Widget{
-							Label{Text: "当前时间"},
-							Label{
-								AssignTo: &currentLabel,
-								Font:     Font{PointSize: 12, Bold: true},
+							Composite{
+								Layout: VBox{MarginsZero: true, Spacing: 2},
+								Children: []Widget{
+									Label{AssignTo: &currentCaption, Text: "当前时间"},
+									Label{
+										AssignTo: &currentLabel,
+										Font:     Font{PointSize: 12, Bold: true},
+									},
+									Label{AssignTo: &lastCaption, Text: "上次记录"},
+									Label{
+										AssignTo: &lastLabel,
+										Font:     Font{PointSize: 10, Bold: true},
+									},
+									Label{
+										AssignTo: &formatLabel,
+									},
+								},
 							},
-							Label{Text: "上次记录"},
-							Label{
-								AssignTo: &lastLabel,
-								Font:     Font{PointSize: 10, Bold: true},
-							},
-							Label{
-								AssignTo: &formatLabel,
+							PushButton{
+								AssignTo:  &copyButton,
+								Text:      "复制",
+								MinSize:   Size{72, 32},
+								MaxSize:   Size{72, 32},
+								OnClicked: handleCopyOnly,
 							},
 						},
 					},
 					PushButton{
-						Text:      "复制",
-						MinSize:   Size{72, 32},
-						MaxSize:   Size{72, 32},
-						OnClicked: handleCopyOnly,
+						AssignTo:  &recordButton,
+						Text:      "记录",
+						OnClicked: handleRecord,
 					},
 				},
-			},
-			PushButton{
-				Text:      "记录",
-				OnClicked: handleRecord,
 			},
 		},
 		OnBoundsChanged: func() {
@@ -265,6 +332,33 @@ func buildTray(icon *walk.Icon) error {
 	if err = addAction(formatMenu.Actions(), "自定义...", editCustomFormat); err != nil {
 		return err
 	}
+
+	if err = actions.Add(walk.NewSeparatorAction()); err != nil {
+		return err
+	}
+	themeMenu, err := walk.NewMenu()
+	if err != nil {
+		return err
+	}
+	themeMenuAction := walk.NewMenuAction(themeMenu)
+	themeMenuAction.SetText("外观")
+	if err = actions.Add(themeMenuAction); err != nil {
+		return err
+	}
+	for _, opt := range themes {
+		option := opt
+		action, err := addCheckAction(themeMenu.Actions(), option.Label, settings.AppearanceTheme == option.ID, func() {
+			settings.AppearanceTheme = option.ID
+			saveSettings()
+			applyAppearance()
+			refreshThemeActions()
+		})
+		if err != nil {
+			return err
+		}
+		themeActions[option.ID] = action
+	}
+	refreshThemeActions()
 
 	if err = actions.Add(walk.NewSeparatorAction()); err != nil {
 		return err
@@ -362,8 +456,7 @@ func toggleWidget() {
 	if settings.ShowWidget {
 		showWidget()
 	} else {
-		saveWindowBounds()
-		mw.Hide()
+		hideWidget()
 	}
 	saveSettings()
 }
@@ -374,6 +467,15 @@ func showWidget() {
 	mw.Show()
 	mw.Activate()
 	saveSettings()
+}
+
+func hideWidget() {
+	settings.ShowWidget = false
+	saveWindowBounds()
+	saveSettings()
+	if mw != nil {
+		mw.Hide()
+	}
 }
 
 func toggleTopMost() {
@@ -419,6 +521,18 @@ func refreshToggleActions() {
 			startupAction.SetText("开机启动：开")
 		} else {
 			startupAction.SetText("开机启动：关")
+		}
+	}
+}
+
+func refreshThemeActions() {
+	if settings.AppearanceTheme == "" {
+		settings.AppearanceTheme = defaultSettings().AppearanceTheme
+	}
+	for _, opt := range themes {
+		if action := themeActions[opt.ID]; action != nil {
+			action.SetChecked(settings.AppearanceTheme == opt.ID)
+			action.SetText(opt.Label)
 		}
 	}
 }
@@ -498,6 +612,52 @@ func refreshLabels() {
 	}
 }
 
+func applyAppearance() {
+	if mw == nil {
+		return
+	}
+	theme := currentTheme()
+	bodyBrush, _ := walk.NewSolidColorBrush(theme.Body)
+	titleBrush, _ := walk.NewSolidColorBrush(theme.Title)
+	buttonBrush, _ := walk.NewSolidColorBrush(theme.Button)
+	mw.SetBackground(bodyBrush)
+	if contentPanel != nil {
+		contentPanel.SetBackground(bodyBrush)
+	}
+	if titleBar != nil {
+		titleBar.SetBackground(titleBrush)
+	}
+	for _, button := range []*walk.PushButton{closeButton, copyButton, recordButton} {
+		if button != nil {
+			button.SetBackground(buttonBrush)
+		}
+	}
+	for _, label := range []*walk.Label{titleLabel, currentLabel, lastLabel} {
+		if label != nil {
+			label.SetTextColor(theme.Text)
+		}
+	}
+	for _, label := range []*walk.Label{currentCaption, lastCaption, formatLabel} {
+		if label != nil {
+			label.SetTextColor(theme.Muted)
+		}
+	}
+	mw.Invalidate()
+}
+
+func currentTheme() themeOption {
+	id := settings.AppearanceTheme
+	if id == "" {
+		id = defaultSettings().AppearanceTheme
+	}
+	for _, opt := range themes {
+		if opt.ID == id {
+			return opt
+		}
+	}
+	return themes[0]
+}
+
 func initPaths() {
 	base := os.Getenv("LOCALAPPDATA")
 	if base == "" {
@@ -517,6 +677,7 @@ func initPaths() {
 func defaultSettings() appSettings {
 	return appSettings{
 		CopyFormat:       "yyyy-MM-dd HH:mm:ss",
+		AppearanceTheme:  "system",
 		ShowWidget:       true,
 		AlwaysOnTop:      true,
 		WidgetCorner:     "bottom-right",
@@ -534,6 +695,9 @@ func loadSettings() {
 	}
 	if strings.TrimSpace(settings.CopyFormat) == "" {
 		settings.CopyFormat = defaultSettings().CopyFormat
+	}
+	if strings.TrimSpace(settings.AppearanceTheme) == "" {
+		settings.AppearanceTheme = defaultSettings().AppearanceTheme
 	}
 	if settings.WidgetCorner == "" {
 		settings.WidgetCorner = "bottom-right"
@@ -685,6 +849,11 @@ func applyToolWindowStyle() {
 	if mw == nil {
 		return
 	}
+	style := win.GetWindowLong(mw.Handle(), win.GWL_STYLE)
+	style &^= win.WS_CAPTION
+	style &^= win.WS_THICKFRAME
+	win.SetWindowLong(mw.Handle(), win.GWL_STYLE, style)
+
 	exStyle := win.GetWindowLong(mw.Handle(), win.GWL_EXSTYLE)
 	exStyle |= win.WS_EX_TOOLWINDOW
 	exStyle &^= win.WS_EX_APPWINDOW

@@ -18,6 +18,7 @@ Download the Windows build:
 - Small always-on-top desktop window
 - One-click record and copy
 - Configurable clipboard format
+- Appearance themes: system, light, dark, pastel blue, pastel pink
 - Persistent local log
 - Optional start with Windows
 - Single-instance behavior
@@ -33,11 +34,14 @@ Run `TimeClicker.exe`.
   - record current time
   - show or hide the desktop window
   - choose the clipboard format
+  - choose the window appearance
   - set a custom format
   - open the log file
   - open the GitHub link
   - toggle start with Windows
   - exit
+
+The window close button only hides the widget. Left-click the tray icon to show it again.
 
 The desktop window shows:
 
@@ -45,6 +49,11 @@ The desktop window shows:
 - last recorded time
 - active clipboard format
 - a copy-only button that does not append to the log
+
+Appearance themes are available from the tray menu. The pastel themes use:
+
+- Pastel blue: `#71c9ce`, `#a6e3e9`, `#cbf1f5`, `#e3fdfd`
+- Pastel pink: `#8785a2`, `#f6f6f6`, `#ffe2e2`, `#ffc7c7`
 
 ## Data
 

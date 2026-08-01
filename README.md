@@ -38,6 +38,7 @@ The desktop window shows:
 - current time
 - last recorded time
 - active clipboard format
+- a copy-only button that does not append to the log
 
 ## Data
 

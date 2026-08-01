@@ -72,6 +72,8 @@ var (
 	currentLabel *walk.Label
 	lastLabel    *walk.Label
 	formatLabel  *walk.Label
+	topMostAction *walk.Action
+	startupAction *walk.Action
 	settings     appSettings
 	appDir       string
 	settingsPath string
@@ -151,18 +153,34 @@ func buildWindow(icon *walk.Icon) error {
 			Spacing: 4,
 		},
 		Children: []Widget{
-			Label{Text: "当前时间"},
-			Label{
-				AssignTo: &currentLabel,
-				Font:     Font{PointSize: 12, Bold: true},
-			},
-			Label{Text: "上次记录"},
-			Label{
-				AssignTo: &lastLabel,
-				Font:     Font{PointSize: 10, Bold: true},
-			},
-			Label{
-				AssignTo: &formatLabel,
+			Composite{
+				Layout: HBox{MarginsZero: true, Spacing: 8},
+				Children: []Widget{
+					Composite{
+						Layout: VBox{MarginsZero: true, Spacing: 2},
+						Children: []Widget{
+							Label{Text: "当前时间"},
+							Label{
+								AssignTo: &currentLabel,
+								Font:     Font{PointSize: 12, Bold: true},
+							},
+							Label{Text: "上次记录"},
+							Label{
+								AssignTo: &lastLabel,
+								Font:     Font{PointSize: 10, Bold: true},
+							},
+							Label{
+								AssignTo: &formatLabel,
+							},
+						},
+					},
+					PushButton{
+						Text:      "复制",
+						MinSize:   Size{72, 32},
+						MaxSize:   Size{72, 32},
+						OnClicked: handleCopyOnly,
+					},
+				},
 			},
 			PushButton{
 				Text:      "记录",
@@ -251,12 +269,15 @@ func buildTray(icon *walk.Icon) error {
 	if err = actions.Add(walk.NewSeparatorAction()); err != nil {
 		return err
 	}
-	if err = addAction(actions, "窗口置顶 开/关", toggleTopMost); err != nil {
+	topMostAction, err = addCheckAction(actions, "", settings.AlwaysOnTop, toggleTopMost)
+	if err != nil {
 		return err
 	}
-	if err = addAction(actions, "开机启动 开/关", toggleStartup); err != nil {
+	startupAction, err = addCheckAction(actions, "", settings.StartWithWindows, toggleStartup)
+	if err != nil {
 		return err
 	}
+	refreshToggleActions()
 	if err = addAction(actions, "打开日志文件", openLogFile); err != nil {
 		return err
 	}
@@ -285,6 +306,21 @@ func addAction(actions *walk.ActionList, text string, fn func()) error {
 	return actions.Add(action)
 }
 
+func addCheckAction(actions *walk.ActionList, text string, checked bool, fn func()) (*walk.Action, error) {
+	action := walk.NewAction()
+	if err := action.SetText(text); err != nil {
+		return nil, err
+	}
+	if err := action.SetCheckable(true); err != nil {
+		return nil, err
+	}
+	if err := action.SetChecked(checked); err != nil {
+		return nil, err
+	}
+	action.Triggered().Attach(fn)
+	return action, actions.Add(action)
+}
+
 func handleRecord() {
 	if err := recordNow(); err != nil {
 		walk.MsgBox(mw, "记录失败", err.Error(), walk.MsgBoxIconError)
@@ -292,6 +328,13 @@ func handleRecord() {
 	}
 	refreshLabels()
 	_ = notifyIcon.SetToolTip(trayTip())
+}
+
+func handleCopyOnly() {
+	copied := formatTime(time.Now(), settings.CopyFormat)
+	if err := walk.Clipboard().SetText(copied); err != nil {
+		walk.MsgBox(mw, "复制失败", err.Error(), walk.MsgBoxIconError)
+	}
 }
 
 func recordNow() error {
@@ -334,19 +377,50 @@ func showWidget() {
 }
 
 func toggleTopMost() {
-	settings.AlwaysOnTop = !settings.AlwaysOnTop
+	if topMostAction != nil {
+		settings.AlwaysOnTop = topMostAction.Checked()
+	} else {
+		settings.AlwaysOnTop = !settings.AlwaysOnTop
+	}
 	applyTopMost()
 	saveSettings()
+	refreshToggleActions()
 }
 
 func toggleStartup() {
 	next := !settings.StartWithWindows
+	if startupAction != nil {
+		next = startupAction.Checked()
+	}
 	if err := setStartup(next); err != nil {
+		if startupAction != nil {
+			startupAction.SetChecked(settings.StartWithWindows)
+		}
 		walk.MsgBox(mw, "开机启动设置失败", err.Error(), walk.MsgBoxIconError)
 		return
 	}
 	settings.StartWithWindows = next
 	saveSettings()
+	refreshToggleActions()
+}
+
+func refreshToggleActions() {
+	if topMostAction != nil {
+		topMostAction.SetChecked(settings.AlwaysOnTop)
+		if settings.AlwaysOnTop {
+			topMostAction.SetText("窗口置顶：开")
+		} else {
+			topMostAction.SetText("窗口置顶：关")
+		}
+	}
+	if startupAction != nil {
+		startupAction.SetChecked(settings.StartWithWindows)
+		if settings.StartWithWindows {
+			startupAction.SetText("开机启动：开")
+		} else {
+			startupAction.SetText("开机启动：关")
+		}
+	}
 }
 
 func openLogFile() {

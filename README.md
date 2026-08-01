@@ -6,6 +6,12 @@ Project link: <https://github.com/stevengeyue>
 
 It keeps a compact desktop window for the current time and the last recorded time. Clicking the tray icon brings the window back if it is hidden; clicking again records the time and copies it to the clipboard.
 
+## Download
+
+Download the Windows build:
+
+[TimeClicker-windows-x64.zip](downloads/TimeClicker-windows-x64.zip)
+
 ## Features
 
 - Tray icon for quick access
